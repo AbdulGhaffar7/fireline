@@ -6,11 +6,19 @@ import {
   Popup,
   useMapEvents,
 } from "react-leaflet";
-import { Modal, Input, Button, Spin } from "antd";
+import { Modal, Input, Button, Spin, Popconfirm, Popover } from "antd";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import customIcon1 from "/images/logo.webp";
 import customIcon2 from "/images/vehicle.webp";
+import {
+  deleteIncident,
+  getIncidents,
+  uploadIncident,
+} from "../services/incidents";
+import { getVehicles, uploadVehicle } from "../services/vehicles";
+import { message } from "antd";
+import { useNavigate } from "react-router-dom";
 
 const createCustomIcon = (iconUrl) =>
   L.icon({
@@ -22,12 +30,19 @@ const createCustomIcon = (iconUrl) =>
 
 const StaffMap = () => {
   const isLargeScreen = window.innerWidth > 900;
+  const defaultCenter = [53.4835, -2.2422];
   const [modalVisible, setModalVisible] = useState(false);
   const [newIncident, setNewIncident] = useState({
-    lat: null,
-    lng: null,
+    lat: 0,
+    lng: 0,
     address: "",
     description: "",
+    title: "",
+  });
+
+  const [newVehicle, setNewVehicle] = useState({
+    lat: 0,
+    lng: 0,
   });
   const [loading, setLoading] = useState(false);
 
@@ -60,66 +75,105 @@ const StaffMap = () => {
 
   // Handle form submission
   const handleSubmit = () => {
-    if (!newIncident.description) {
-      alert("Please enter a description!");
+    if (!newIncident.description || !newIncident.title) {
+      message.error("Missing Title or Description!");
       return;
     }
 
-    console.log("Submitting:", newIncident);
+    const convertToBase64 = (file) => {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = (error) => reject(error);
+      });
+    };
 
-    setIncidents([...incidents, { ...newIncident, id: incidents.length + 1 }]);
-    setModalVisible(false);
+    const convertImagesToBase64 = async (images) => {
+      const base64Images = await Promise.all(
+        images.map((image) => convertToBase64(image))
+      );
+      return base64Images;
+    };
+
+    const submitIncident = async () => {
+      const base64Images = await convertImagesToBase64(
+        newIncident.images || []
+      );
+      const formattedIncident = {
+        title: newIncident.title,
+        description: newIncident.description,
+        location: [newIncident?.lat, newIncident?.lng],
+        address: newIncident.address,
+        images: base64Images,
+      };
+
+      try {
+        const response = await uploadIncident(formattedIncident);
+        if (response?.insertedId) {
+          setModalVisible(false);
+          setUpdate(!update);
+          message.success("Incident added successfully");
+        } else {
+          message.error("Error adding incident");
+        }
+      } catch (error) {
+        message.error("Error adding incident");
+        console.error("Error adding incident:", error);
+      }
+    };
+
+    submitIncident();
   };
 
-  const center = [53.4835, -2.2422];
-  const logoMarkers = [
-    [53.4612, -2.2478],
-    [53.4893, -2.1934],
-    [53.5189, -2.2098],
-    [53.4921, -2.2156],
-    [53.4754, -2.2289],
-    [53.4832, -2.2457],
-    [53.4967, -2.2283],
-  ];
-  const vehicleMarkers = [
-    [53.4794, -2.2453],
-    [53.4807, -2.2367],
-    [53.4668, -2.2908],
-    [53.5118, -2.2118],
-    [53.4547, -2.2681],
-  ];
-
-  const [incidents, setIncidents] = useState([...logoMarkers]);
-
-  const bannerImages = [
-    { src: "/images/map_banner/1.png", url: "https://example.com/1" },
-    { src: "/images/map_banner/2.png", url: "https://example.com/2" },
-    { src: "/images/map_banner/3.png", url: "https://example.com/3" },
-    { src: "/images/map_banner/4.png", url: "https://example.com/4" },
-  ];
-
-  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [center, setCenter] = useState(defaultCenter);
+  const [incidents, setIncidents] = useState([]);
+  const [vehicles, setVehicles] = useState([]);
+  const [map, setMap] = useState(null);
+  const [update, setUpdate] = useState(false);
 
   useEffect(() => {
-    setNewIncident([]);
-    const interval = setInterval(() => {
-      setCurrentImageIndex(
-        (prevIndex) => (prevIndex + 1) % bannerImages.length
-      );
-    }, 10000); // Change image every 10 seconds
+    const getFireIncidents = async () => {
+      try {
+        const response = await getIncidents();
+        if (Array.isArray(response)) {
+          setIncidents(response);
+          if (response.length > 0) {
+            setCenter(response[0].location);
+          }
+        } else {
+          message.error("Error fetching incidents");
+        }
+      } catch (error) {
+        message.error("Error fetching incidents");
+        console.error("Error fetching incidents:", error);
+      }
+    };
+    const getFireVehicles = async () => {
+      try {
+        const response = await getVehicles();
+        if (Array.isArray(response)) {
+          setVehicles(response);
+        } else {
+          message.error("Error fetching vehicles");
+        }
+      } catch (error) {
+        console.error("Error fetching vehicles:", error);
+        message.error("Error fetching vehicles");
+      }
+    };
 
-    return () => clearInterval(interval);
-  }, []);
+    getFireIncidents();
+    getFireVehicles();
+  }, [update]);
 
-  const addIncident = (lat, lng) => {
-    const description = prompt("Enter fire incident details:");
-    if (description) {
-      setIncidents([
-        ...incidents,
-        { id: incidents.length + 1, lat, lng, description },
-      ]);
+  useEffect(() => {
+    if (center) {
+      if (map) {
+        map.flyTo(center);
+      }
     }
-  };
+  }, [center]);
 
   const MapClickHandler = () => {
     useMapEvents({
@@ -130,61 +184,142 @@ const StaffMap = () => {
     return null;
   };
 
+  const navigate = useNavigate();
+
   return (
     <MapContainer
       center={center}
       zoom={13}
       style={{ height: "75vh", width: "100%" }}
+      ref={setMap}
     >
       <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
       <MapClickHandler />
-      {logoMarkers.map((position, index) => (
+      {incidents?.map((incident, index) => (
         <Marker
-          position={position}
+          position={incident?.location}
           icon={createCustomIcon(customIcon1)}
           key={index}
-        ></Marker>
+        >
+          <Popup position={incident?.location}>
+            <div>
+              <p>
+                {incident.location[0]} {incident.location[1]}
+              </p>
+              <h3>{incident.title}</h3>
+              <p>{incident.description?.substring(0, 100)}...</p>
+
+              <Popover
+                content={
+                  <div>
+                    <p>
+                      <strong>Starting Latitude:</strong>
+                    </p>
+
+                    <Input
+                      placeholder="Enter starting latitude"
+                      value={newVehicle?.lat}
+                      onChange={(e) =>
+                        setNewVehicle({
+                          ...newVehicle,
+                          lat: e.target.value,
+                        })
+                      }
+                    />
+                    <p>
+                      <strong>Starting Longitude:</strong>
+                    </p>
+                    <Input
+                      placeholder="Enter starting longitude"
+                      value={newVehicle?.lng}
+                      onChange={(e) =>
+                        setNewVehicle({
+                          ...newVehicle,
+                          lng: e.target.value,
+                        })
+                      }
+                    />
+                    <Button
+                      style={{
+                        marginTop: "8px",
+                      }}
+                      type="primary"
+                      onClick={async () => {
+                        const time = Math.floor(Math.random() * 26 + 5) * 60000;
+                        const formattedVehicle = {
+                          location: [newVehicle?.lat, newVehicle?.lng],
+                          destination: incident?.location,
+                          travelTime: time,
+                          reachTime: new Date(Date.now() + time).toISOString(),
+                        };
+                        const response = await uploadVehicle(formattedVehicle);
+                        if (response?.insertedId) {
+                          message.success("Vehicle assigned successfully");
+                          setUpdate(!update);
+                        }
+                      }}
+                    >
+                      Confirm
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        setNewVehicle({
+                          lat:
+                            incident.location[0] +
+                            (Math.random() * 0.03 - 0.001),
+                          lng:
+                            incident.location[1] +
+                            (Math.random() * 0.03 - 0.001),
+                        });
+                      }}
+                      style={{
+                        marginLeft: "8px",
+                      }}
+                    >
+                      Random Start
+                    </Button>
+                  </div>
+                }
+                title="Assign Vehicle Starting Point"
+                trigger="click"
+              >
+                <Button
+                  type="primary"
+                  style={{
+                    marginRight: "8px",
+                  }}
+                >
+                  Assign Vehicle
+                </Button>
+              </Popover>
+              <Popconfirm
+                title={`Are you sure you want to delete the incident ${incident?.title}`}
+                onConfirm={async () => {
+                  const response = await deleteIncident(incident?._id);
+                  setUpdate(!update);
+                }}
+              >
+                <Button
+                  type="primary"
+                  style={{
+                    backgroundColor: "red",
+                  }}
+                >
+                  Delete
+                </Button>
+              </Popconfirm>
+            </div>
+          </Popup>
+        </Marker>
       ))}
 
-      {vehicleMarkers.map((position, index) => (
+      {vehicles.map((vehicle, index) => (
         <Marker
-          position={position}
+          position={vehicle?.location}
           icon={createCustomIcon(customIcon2)}
           key={index}
         ></Marker>
       ))}
-
-      <div
-        style={{
-          position: "absolute",
-          top: "25px",
-          left: "50px",
-          width: isLargeScreen ? "350px" : "180px",
-          height: isLargeScreen ? "250px" : "150px",
-          backgroundColor: "#b50000",
-          //border: "5px solid #b50000",
-          borderRadius: "20px",
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          boxShadow: "0 4px 6px rgba(0, 0, 0, 0.1)",
-          zIndex: 1000,
-        }}
-      >
-        <img
-          src={bannerImages[currentImageIndex]?.src}
-          onClick={() =>
-            window.open(bannerImages[currentImageIndex]?.url, "_blank")
-          }
-          alt="Advertisement"
-          style={{
-            width: "90%",
-            height: "90%",
-            objectFit: "cover",
-            transition: "opacity 1s ease-in-out",
-          }}
-        />
-      </div>
 
       <Modal
         title="Add Fire Incident"
@@ -192,6 +327,7 @@ const StaffMap = () => {
         onCancel={() => setModalVisible(false)}
         onOk={handleSubmit}
         destroyOnClose
+        okText="Submit"
       >
         <p>
           <strong>Latitude:</strong> {newIncident.lat}
@@ -202,11 +338,28 @@ const StaffMap = () => {
         <p>
           <strong>Address:</strong>
         </p>
+
         <Input.TextArea
           placeholder="Enter address"
           value={loading ? "Loading..." : newIncident.address}
           onChange={(e) =>
             setNewIncident({ ...newIncident, address: e.target.value })
+          }
+          style={{
+            margin: "0px 0px 10px 0px",
+          }}
+          rows={3}
+        />
+
+        <p>
+          <strong>Title:</strong>
+        </p>
+
+        <Input
+          placeholder="Please write a Title"
+          value={newIncident.title}
+          onChange={(e) =>
+            setNewIncident({ ...newIncident, title: e.target.value })
           }
           style={{
             margin: "0px 0px 10px 0px",

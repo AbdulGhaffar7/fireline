@@ -1,39 +1,51 @@
-import React from "react";
-import { Card, Typography, Button, Row, Col } from "antd";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { Card, Typography, Button, Row, Col, Spin } from "antd";
+import { useNavigate, useParams } from "react-router-dom";
 import ImageGallery from "react-image-gallery";
 import "react-image-gallery/styles/css/image-gallery.css";
-
-const images = [
-  {
-    original: "https://picsum.photos/id/1018/1000/600/",
-    thumbnail: "https://picsum.photos/id/1018/250/150/",
-  },
-  {
-    original: "https://picsum.photos/id/1015/1000/600/",
-    thumbnail: "https://picsum.photos/id/1015/250/150/",
-  },
-  {
-    original: "https://picsum.photos/id/1019/1000/600/",
-    thumbnail: "https://picsum.photos/id/1019/250/150/",
-  },
-];
+import { getIncidentById } from "../services/incidents";
 
 const { Title, Paragraph } = Typography;
 
 const IncidentDetails = () => {
-  const incident = {
-    title: "Wildfire in Yellowstone",
-    address:
-      "Brotherton Drive, Blackfriars, Lower Broughton, Salford, Greater Manchester, England, M3 6BH, United Kingdom",
-    description:
-      "Sequoia National Forest lands, roads, trails, and recreation sites around the Trout and Long Fires are temporarily closed under Forest Order No. 0513-24-12. Lands, roads, trails, and recreation sites around the Borel Fire are closed under Forest Order No. 0513-24-14. Fire restrictions are in effect under Forest Order No. 0513-24-10. All orders, maps, and accompanying appendices can be found on the Forest’s website: tinyurl.com/2en2d36kExternal Link. The Bureau of Land Management Bakersfield Field Office has temporarily closed Long Valley Campground, Chimney Creek Campground, and portions of the Pacific Crest Trail (PCT). View the emergency closure order here: tinyurl.com/4mprcb9bExternal Link. The PCT is closed between Hwy 178 at Walker Pass (mile 653) and the South Fork of the Kern River bridge (mile 717.7).",
-    images: ["/images/map_banner/1.png", "/images/map_banner/2.png"],
-  };
-
+  const { id } = useParams();
+  const [incident, setIncident] = useState(null);
+  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
+  useEffect(() => {
+    const fetchIncident = async () => {
+      const data = await getIncidentById(id);
+      setIncident(data);
+      setLoading(false);
+    };
+
+    fetchIncident();
+  }, [id]);
+
+  if (loading)
+    return (
+      <div
+        style={{
+          width: "100%",
+          height: "80vh",
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+      >
+        <Spin size="large" />
+      </div>
+    );
+
   if (!incident) return <p>No incident data available.</p>;
+
+  const formatImages = (images) => {
+    return images.map((image) => ({
+      original: `${image}`,
+      thumbnail: `${image}`,
+    }));
+  };
 
   return (
     <Row>
@@ -74,7 +86,11 @@ const IncidentDetails = () => {
           padding: "16px",
         }}
       >
-        <ImageGallery items={images} />
+        {incident.images && incident.images.length > 0 ? (
+          <ImageGallery items={formatImages(incident.images)} />
+        ) : (
+          <Paragraph>No images available.</Paragraph>
+        )}
       </Col>
     </Row>
   );

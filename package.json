@@ -12,8 +12,10 @@
   "dependencies": {
     "@ant-design/icons": "^5.6.0",
     "antd": "^5.23.3",
+    "axios": "^1.7.9",
     "i": "^0.3.7",
     "leaflet": "^1.9.4",
+    "leaflet-drift-marker": "^2.0.0",
     "npm": "^11.1.0",
     "react": "^19.0.0-rc.1",
     "react-dom": "^19.0.0-rc.1",

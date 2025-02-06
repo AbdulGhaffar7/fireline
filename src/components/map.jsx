@@ -4,6 +4,10 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import customIcon1 from "/images/logo.webp";
 import customIcon2 from "/images/vehicle.webp";
+import { getIncidents } from "../services/incidents";
+import { deleteVehicle, getVehicles } from "../services/vehicles";
+import { message, Button } from "antd";
+import { useNavigate } from "react-router-dom";
 
 const createCustomIcon = (iconUrl) =>
   L.icon({
@@ -16,23 +20,7 @@ const createCustomIcon = (iconUrl) =>
 const MapWithMarkers = () => {
   const isLargeScreen = window.innerWidth > 900;
 
-  const center = [53.4835, -2.2422];
-  const logoMarkers = [
-    [53.4612, -2.2478],
-    [53.4893, -2.1934],
-    [53.5189, -2.2098],
-    [53.4921, -2.2156],
-    [53.4754, -2.2289],
-    [53.4832, -2.2457],
-    [53.4967, -2.2283],
-  ];
-  const vehicleMarkers = [
-    [53.4794, -2.2453],
-    [53.4807, -2.2367],
-    [53.4668, -2.2908],
-    [53.5118, -2.2118],
-    [53.4547, -2.2681],
-  ];
+  const defaultCenter = [53.4835, -2.2422];
 
   const bannerImages = [
     { src: "/images/map_banner/1.png", url: "https://example.com/1" },
@@ -42,6 +30,16 @@ const MapWithMarkers = () => {
   ];
 
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [center, setCenter] = useState(defaultCenter);
+  const [incidents, setIncidents] = useState([]);
+  const [vehicles, setVehicles] = useState([]);
+  const [map, setMap] = useState(null);
+  const [update, setUpdate] = useState(false);
+
+  const navigate = useNavigate();
+  const navigateToDetails = (incidentId) => {
+    navigate(`/incident-details/${incidentId}`);
+  };
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -53,26 +51,132 @@ const MapWithMarkers = () => {
     return () => clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    const getFireIncidents = async () => {
+      try {
+        const response = await getIncidents();
+        if (Array.isArray(response)) {
+          setIncidents(response);
+          if (response.length > 0) {
+            setCenter(response[0].location);
+          }
+        } else {
+          message.error("Error fetching incidents");
+        }
+      } catch (error) {
+        message.error("Error fetching incidents");
+        console.error("Error fetching incidents:", error);
+      }
+    };
+    const getFireVehicles = async () => {
+      try {
+        const response = await getVehicles();
+        if (Array.isArray(response)) {
+          setVehicles(response);
+        } else {
+          message.error("Error fetching vehicles");
+        }
+      } catch (error) {
+        console.error("Error fetching vehicles:", error);
+        message.error("Error fetching vehicles");
+      }
+    };
+
+    getFireIncidents();
+    getFireVehicles();
+  }, [update]);
+
+  useEffect(() => {
+    if (center) {
+      if (map) {
+        map.flyTo(center);
+      }
+    }
+  }, [center]);
+  useEffect(() => {
+    if (map) {
+      vehicles.forEach((vehicle) => {
+        if (vehicle.marker) {
+          const start = vehicle.marker.getLatLng();
+          const startTime = performance.now();
+          const end = L.latLng(vehicle.destination);
+          const duration = vehicle.travelTime;
+          const reachTime = new Date(vehicle.reachTime).getTime();
+          const currentTime = Date.now();
+          const elapsedTime = currentTime - (reachTime - duration);
+          const progress = Math.min(elapsedTime / duration, 1);
+
+          // Set initial position based on progress
+          const currentLat = start.lat + (end.lat - start.lat) * progress;
+          const currentLng = start.lng + (end.lng - start.lng) * progress;
+          vehicle.marker.setLatLng([currentLat, currentLng]);
+
+          // Animation function to update position over time
+          const animate = (currentTime) => {
+            const currentTimeNow = Date.now();
+            const elapsedTime = currentTimeNow - (reachTime - duration);
+            const progress = Math.min(elapsedTime / duration, 1);
+
+            // Set initial position based on progress
+            const currentLat = start.lat + (end.lat - start.lat) * progress;
+            const currentLng = start.lng + (end.lng - start.lng) * progress;
+            vehicle.marker.setLatLng([currentLat, currentLng]);
+
+            if (progress < 1) {
+              requestAnimationFrame(animate);
+            } else {
+              vehicle.marker.bindPopup("Vehicle arrived").openPopup();
+              vehicle.marker.on("popupclose", async () => {
+                await deleteVehicle(vehicle?._id);
+                setUpdate(!update);
+              });
+            }
+          };
+
+          // Start the animation
+          requestAnimationFrame(animate);
+        }
+      });
+    }
+  }, [vehicles, map]);
+
   return (
     <MapContainer
       center={center}
       zoom={13}
       style={{ height: "75vh", width: "100%" }}
+      ref={setMap}
     >
       <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-      {logoMarkers.map((position, index) => (
+      {incidents?.map((incident, index) => (
         <Marker
-          position={position}
+          position={incident?.location}
           icon={createCustomIcon(customIcon1)}
           key={index}
-        ></Marker>
+        >
+          <Popup position={incident?.location}>
+            <div>
+              <h3>{incident.title}</h3>
+              <p>{incident.description?.substring(0, 100)}...</p>
+              <Button
+                type="primary"
+                onClick={() => navigateToDetails(incident._id)}
+              >
+                Details
+              </Button>
+            </div>
+          </Popup>
+        </Marker>
       ))}
 
-      {vehicleMarkers.map((position, index) => (
+      {vehicles.map((vehicle, index) => (
         <Marker
-          position={position}
+          position={vehicle?.location}
           icon={createCustomIcon(customIcon2)}
           key={index}
+          ref={(marker) => {
+            vehicle.marker = marker;
+          }}
         ></Marker>
       ))}
 
@@ -84,7 +188,6 @@ const MapWithMarkers = () => {
           width: isLargeScreen ? "350px" : "180px",
           height: isLargeScreen ? "250px" : "150px",
           backgroundColor: "#b50000",
-          //border: "5px solid #b50000",
           borderRadius: "20px",
           display: "flex",
           justifyContent: "center",
