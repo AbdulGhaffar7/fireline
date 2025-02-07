@@ -8,8 +8,11 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
-server/node_modules
+client/node_modules
 dist
+api
+vercel.json
+yarn.lock
 
 dist-ssr
 *.local
@@ -24,3 +27,5 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+.vercel

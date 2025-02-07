@@ -73,7 +73,7 @@ const FireLineHeader = () => {
         <div
           style={{
             width: "50%",
-            backgroundColor: "#e3f5ff",
+            // backgroundColor: "#e3f5ff",
             borderRadius: "10px",
             padding: "10px",
             color: "#333",

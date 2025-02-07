@@ -8,10 +8,13 @@ const ObjectId = require("mongodb").ObjectId;
 var cors = require("cors");
 
 const app = express();
-const port = 3001;
+const port = 3000;
 
 app.use(bodyParser.json());
 app.use(cors());
+
+let fireIncidentsCollection;
+let vehiclesCollection;
 
 // API to get list of fire incidents
 app.get("/api/fire-incidents", async (req, res) => {
@@ -88,11 +91,11 @@ app.delete("/api/vehicles/:id", async (req, res) => {
   res.status(204).send();
 });
 
-app.use(express.static(path.join(__dirname, "../dist")));
+app.use(express.static(path.join(__dirname, "client", "dist")));
 
 // Catch-all route to serve index.html for single-page applications
 app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "../dist", "index.html"));
+  res.sendFile(path.join(__dirname, "client", "dist", "index.html"));
 });
 
 app.listen(port, "localhost", async () => {
