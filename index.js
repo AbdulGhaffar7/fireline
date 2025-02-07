@@ -103,8 +103,7 @@ app.listen(port, "localhost", async () => {
   await connectToDatabase();
 });
 
-const url =
-  "mongodb+srv://abdul:QkRJ8a3sbbzI53au@test.i8aw1.mongodb.net/?retryWrites=true&w=majority&appName=test";
+const url = ""; //Please enter yoor mongodb uri here!
 const client = new MongoClient(url);
 const dbName = "fireline";
 const db = client.db(dbName);
