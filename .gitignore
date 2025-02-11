@@ -10,8 +10,6 @@ lerna-debug.log*
 node_modules
 client/node_modules
 dist
-api
-vercel.json
 yarn.lock
 
 dist-ssr
