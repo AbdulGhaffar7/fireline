@@ -103,7 +103,8 @@ app.listen(port, "localhost", async () => {
   await connectToDatabase();
 });
 
-const url = ""; //Please enter yoor mongodb uri here!
+const url =
+  "mongodb+srv://admin:ZaZS47xubKUR7ORI@firecluster1.njfnk.mongodb.net/?retryWrites=true&w=majority"; //Please enter yoor mongodb uri here!
 const client = new MongoClient(url);
 const dbName = "fireline";
 const db = client.db(dbName);
